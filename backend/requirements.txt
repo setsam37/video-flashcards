@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic>=2
+pydantic-settings
+python-multipart
+openai
+yt-dlp
+httpx
+python-dotenv
+pytest

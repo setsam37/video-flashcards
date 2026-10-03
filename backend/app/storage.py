@@ -1,0 +1,64 @@
+from contextlib import contextmanager
+from pathlib import Path
+import json, sqlite3
+from .models import SourceDescriptor,TranscriptSegment,SyllabusNode,Card,Job,CoverageGap,Interval,LectureView
+
+class Repository:
+    def __init__(self,path: Path):
+        self.path=Path(path);self.path.parent.mkdir(parents=True,exist_ok=True)
+        with self.connection() as db:
+            db.executescript('''
+            CREATE TABLE IF NOT EXISTS sources(id TEXT PRIMARY KEY,payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS transcripts(lecture_id TEXT PRIMARY KEY REFERENCES sources(id),payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS nodes(lecture_id TEXT PRIMARY KEY REFERENCES sources(id),payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS cards(id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),primary_time REAL NOT NULL,payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS gaps(lecture_id TEXT NOT NULL REFERENCES sources(id),point_id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(lecture_id,point_id));
+            CREATE TABLE IF NOT EXISTS covered(lecture_id TEXT PRIMARY KEY REFERENCES sources(id),payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),status TEXT NOT NULL,payload TEXT NOT NULL,request_key TEXT NOT NULL,created INTEGER PRIMARYKEYDEFAULT);
+            ''')
+
+    @contextmanager
+    def connection(self):
+        db=sqlite3.connect(self.path,timeout=30)
+        db.row_factory=sqlite3.Row
+        db.execute('PRAGMA foreign_keys=ON');db.execute('PRAGMA journal_mode=WAL')
+        try:
+            yield db;db.commit()
+        except Exception:
+            db.rollback();raise
+        finally: db.close()
+
+    def save_source(self,source):
+        with self.connection() as db:
+            db.execute('INSERT INTO sources VALUES (?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',(source.lecture_id,source.model_dump_json()))
+
+    def get_source(self,id):
+        with self.connection() as db: row=db.execute('SELECT payload FROM sources WHERE id=?',(id,)).fetchone()
+        if not row: raise KeyError(id)
+        return SourceDescriptor.model_validate_json(row['payload'])
+
+    def _save_list(self,table,id,items):
+        with self.connection() as db:
+            db.execute(f'INSERT INTO {table} VALUES (?,?) ON CONFLICT(lecture_id) DO UPDATE SET payload=excluded.payload',(id,json.dumps([x.model_dump() for x in items])))
+
+    def _get_list(self,table,id,model):
+        with self.connection() as db: row=db.execute(f'SELECT payload FROM {table} WHERE lecture_id=?',(id,)).fetchone()
+        return [model.model_validate(x) for x in json.loads(row['payload'])] if row else []
+
+    def save_transcript(self,id,segments): self._save_list('transcripts',id,segments)
+    def get_segments(self,id): return self._get_list('transcripts',id,TranscriptSegment)
+    def save_syllabus(self,id,nodes): self._save_list('nodes',id,nodes)
+    def get_nodes(self,id): return self._get_list('nodes',id,SyllabusNode)
+    def get_covered(self,id): return self._get_list('covered',id,Interval)
+
+    def get_lecture(self,id):
+        source=self.get_source(id)
+        with self.connection() as db:
+            cards=[Card.model_validate_json(r['payload']) for r in db.execute('SELECT payload FROM cards WHERE lecture_id=? ORDER BY primary_time,id',(id,))]
+            gaps=[CoverageGap.model_validate_json(r['payload']) for r in db.execute('SELECT payload FROM gaps WHERE lecture_id=?',(id,))]
+            jobs=[Job.model_validate_json(r['payload']) for r in db.execute('SELECT payload FROM jobs WHERE lecture_id=? ORDER BY rowid',(id,))]
+        return LectureView(id=id,title=source.title,duration=source.duration,source_kind=source.source_kind,youtube_id=source.youtube_id,media_url=f'/api/lectures/{id}/media' if source.media_path else None,syllabus=self.get_nodes(id),cards=cards,gaps=gaps,completed_intervals=self.get_covered(id),jobs=jobs)
+
+    def list_lectures(self):
+        with self.connection() as db: ids=[r['id'] for r in db.execute('SELECT id FROM sources ORDER BY rowid DESC')]
+        return [{'id':id,'title':self.get_source(id).title,'duration':self.get_source(id).duration} for id in ids]
