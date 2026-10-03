@@ -70,6 +70,7 @@ class Card(Model):
 class CoverageGap(Model):
     point_id: str
     reason: str
+    primary_time: float | None = None
 
 class GenerationResult(Model):
     cards: list[Card]

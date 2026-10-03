@@ -28,7 +28,7 @@ def generate_selection(lecture_id,selected,nodes,segments,provider):
             id=stable_id(lecture_id+':'+p.primary_segment_id+':'+normalized(p.summary))
             if id in seen_points:continue
             seen_points.add(id);p=p.model_copy(update={'id':id})
-            if p.visual_gap:gaps[id]=CoverageGap(point_id=id,reason=f'{p.summary}: the explanation depends on visual material not captured in the transcript.')
+            if p.visual_gap:gaps[id]=CoverageGap(point_id=id,reason=f'{p.summary}: the explanation depends on visual material not captured in the transcript.',primary_time=next(s.start for s in evidence if s.id==p.primary_segment_id))
             else:points.append(p)
         pending=points
         covered=set()
@@ -42,6 +42,6 @@ def generate_selection(lecture_id,selected,nodes,segments,provider):
                     cards[card.id]=card;covered.update(card.point_ids)
                 except ValueError:continue
             pending=[p for p in points if p.id not in covered]
-        for p in pending:gaps[p.id]=CoverageGap(point_id=p.id,reason=f'{p.summary}: a supported flashcard could not be generated after one retry.')
-    if not cards and not gaps:gaps['empty_'+stable_id(str(selected))]=CoverageGap(point_id='empty_'+stable_id(str(selected)),reason='No substantive teaching points were identified in these selected transcript ranges.')
+        for p in pending:gaps[p.id]=CoverageGap(point_id=p.id,reason=f'{p.summary}: a supported flashcard could not be generated after one retry.',primary_time=next(s.start for s in evidence if s.id==p.primary_segment_id))
+    if not cards and not gaps:gaps['empty_'+stable_id(str(selected))]=CoverageGap(point_id='empty_'+stable_id(str(selected)),reason='No substantive teaching points were identified in these selected transcript ranges.',primary_time=selected[0].start if selected else None)
     return GenerationResult(cards=sorted(cards.values(),key=lambda c:(c.primary_time,c.id)),gaps=list(gaps.values()),completed_intervals=selected)

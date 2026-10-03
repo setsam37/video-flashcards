@@ -14,7 +14,7 @@ class Repository:
             CREATE TABLE IF NOT EXISTS cards(id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),primary_time REAL NOT NULL,payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS gaps(lecture_id TEXT NOT NULL REFERENCES sources(id),point_id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(lecture_id,point_id));
             CREATE TABLE IF NOT EXISTS covered(lecture_id TEXT PRIMARY KEY REFERENCES sources(id),payload TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),status TEXT NOT NULL,payload TEXT NOT NULL,request_key TEXT NOT NULL,created INTEGER PRIMARYKEYDEFAULT);
+            CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),status TEXT NOT NULL,payload TEXT NOT NULL,request_key TEXT NOT NULL);
             ''')
 
     @contextmanager
@@ -62,3 +62,22 @@ class Repository:
     def list_lectures(self):
         with self.connection() as db: ids=[r['id'] for r in db.execute('SELECT id FROM sources ORDER BY rowid DESC')]
         return [{'id':id,'title':self.get_source(id).title,'duration':self.get_source(id).duration} for id in ids]
+
+    def commit_generation(self,id,intervals,result,regenerate):
+        from .syllabus.selection import normalize
+        from .cards.validate import in_selection
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            if regenerate:
+                for span in intervals:db.execute('DELETE FROM cards WHERE lecture_id=? AND primary_time>=? AND primary_time<?',(id,span.start,span.end))
+                for row in db.execute('SELECT point_id,payload FROM gaps WHERE lecture_id=?',(id,)).fetchall():
+                    gap=CoverageGap.model_validate_json(row['payload'])
+                    if gap.primary_time is not None and in_selection(gap.primary_time,intervals):db.execute('DELETE FROM gaps WHERE lecture_id=? AND point_id=?',(id,row['point_id']))
+            for card in result.cards:
+                db.execute('INSERT INTO cards VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,primary_time=excluded.primary_time',(card.id,id,card.primary_time,card.model_dump_json()))
+                for point in card.point_ids:db.execute('DELETE FROM gaps WHERE lecture_id=? AND point_id=?',(id,point))
+            for gap in result.gaps:db.execute('INSERT INTO gaps VALUES (?,?,?) ON CONFLICT(lecture_id,point_id) DO UPDATE SET payload=excluded.payload',(id,gap.point_id,gap.model_dump_json()))
+            row=db.execute('SELECT payload FROM covered WHERE lecture_id=?',(id,)).fetchone()
+            old=[Interval.model_validate(x) for x in json.loads(row['payload'])] if row else []
+            merged=normalize(old+result.completed_intervals)
+            db.execute('INSERT INTO covered VALUES (?,?) ON CONFLICT(lecture_id) DO UPDATE SET payload=excluded.payload',(id,json.dumps([i.model_dump() for i in merged])))
