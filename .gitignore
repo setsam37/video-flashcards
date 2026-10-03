@@ -2,6 +2,7 @@
 data/
 node_modules/
 web/dist/
+web/dist-pages/
 web/test-results/
 web/playwright-report/
 __pycache__/

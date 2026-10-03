@@ -2,6 +2,12 @@
 
 A personal, local app that turns a lecture into a chapter syllabus and flashcards based on what the lecture teaches.
 
+## GitHub Pages
+
+The public entry page is published at [setsam37.github.io/video-flashcards](https://setsam37.github.io/video-flashcards/). GitHub Pages serves static files and cannot run this app's Python processing worker. The entry page therefore explains that online generation is unavailable and links to the working local app. It does not send videos, credentials, or your library to GitHub.
+
+Build the Pages entry screen with `npm --prefix web run build:pages`. This writes `web/dist-pages` with relative asset paths suitable for a project Pages URL. Only those generated files and a `.nojekyll` marker belong on the `gh-pages` publishing branch. The normal build still writes `web/dist` and serves the full local app. A future online processing service is a separate deployment.
+
 ## Open your app
 
 On this computer, the Python environment, web dependencies, FFmpeg paths, API key, and production build are already configured. From this folder in PowerShell:
