@@ -1,5 +1,5 @@
 import hashlib,re
-from ..models import Interval,SyllabusNode
+from ..models import SyllabusNode,ChapterSeed
 from ..errors import ProcessingError
 from ..jobs import JobQueue
 from ..importing.youtube import import_youtube
@@ -19,26 +19,35 @@ def chapter_roots(source):
     if roots and cursor<source.duration:roots.append(SyllabusNode(id=node_id(source.lecture_id,cursor,source.duration),title='Additional material',start=cursor,end=source.duration,inferred=True))
     return roots
 
+def inferred_roots(source,proposals,start,end):
+    roots=[]
+    tops=sorted([p for p in proposals if p.parent_start is None and start<=p.start<p.end<=end],key=lambda p:(p.start,p.end))
+    for p in tops:
+        if roots and p.start<roots[-1].end:continue
+        if roots and p.start<=roots[-1].end+2 and re.sub(r'\W','',p.title.casefold())==re.sub(r'\W','',roots[-1].title.casefold()):
+            previous=roots.pop();p=p.model_copy(update={'start':previous.start})
+        cursor=roots[-1].end if roots else start
+        if cursor<p.start:roots.append(SyllabusNode(id=node_id(source.lecture_id,cursor,p.start),title='Additional material',start=cursor,end=p.start,inferred=True))
+        roots.append(SyllabusNode(id=node_id(source.lecture_id,p.start,p.end),title=p.title.strip(),start=p.start,end=p.end,inferred=True))
+    cursor=roots[-1].end if roots else start
+    if cursor<end:roots.append(SyllabusNode(id=node_id(source.lecture_id,cursor,end),title='Additional material',start=cursor,end=end,inferred=True))
+    return roots
+
 def build_syllabus(source,segments,provider):
     if not segments:raise ProcessingError('transcript_missing','A timestamped transcript is needed before preparing the syllabus.')
     roots=chapter_roots(source)
+    valid_chapters=[ChapterSeed(title=n.title,start=n.start,end=n.end) for n in roots if not n.inferred]
     proposals=[]
     for start in range(0,max(1,int(source.duration)),600):
         window=[s for s in segments if s.end>start and s.start<start+600]
-        if window:proposals.extend(provider.propose_syllabus(window,source.chapters))
+        if window:proposals.extend(provider.propose_syllabus(window,valid_chapters))
     evidence={s.id:s for s in segments}
-    usable=[p for p in proposals if p.end<=source.duration and p.title.strip() and p.source_segment_ids and all(id in evidence for id in p.source_segment_ids)]
+    usable=[p for p in proposals if p.end<=source.duration and p.title.strip() and p.source_segment_ids and all(id in evidence and evidence[id].end>p.start and evidence[id].start<p.end for id in p.source_segment_ids)]
     if not roots:
-        tops=sorted([p for p in usable if p.parent_start is None],key=lambda p:(p.start,p.end))
-        for p in tops:
-            if roots and p.start<roots[-1].end:continue
-            if roots and p.start<=roots[-1].end+2 and re.sub(r'\W','',p.title.casefold())==re.sub(r'\W','',roots[-1].title.casefold()):
-                previous=roots.pop();p=p.model_copy(update={'start':previous.start})
-            cursor=roots[-1].end if roots else 0
-            if cursor<p.start:roots.append(SyllabusNode(id=node_id(source.lecture_id,cursor,p.start),title='Additional material',start=cursor,end=p.start,inferred=True))
-            roots.append(SyllabusNode(id=node_id(source.lecture_id,p.start,p.end),title=p.title.strip(),start=p.start,end=p.end,inferred=True))
-        if not roots:raise ProcessingError('syllabus_incomplete','No supported topics were identified. Retry syllabus preparation.')
-        if roots[-1].end<source.duration:roots.append(SyllabusNode(id=node_id(source.lecture_id,roots[-1].end,source.duration),title='Additional material',start=roots[-1].end,end=source.duration,inferred=True))
+        if not any(p.parent_start is None for p in usable):raise ProcessingError('syllabus_incomplete','No supported topics were identified. Retry syllabus preparation.')
+        roots=inferred_roots(source,usable,0,source.duration)
+    else:
+        roots=[node for root in roots for node in (inferred_roots(source,usable,root.start,root.end) if root.inferred else [root])]
     children=[]
     for p in sorted(usable,key=lambda p:(p.start,p.end)):
         parent=next((r for r in roots if r.start==p.parent_start and r.start<=p.start<p.end<=r.end),None)

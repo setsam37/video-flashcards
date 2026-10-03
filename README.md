@@ -46,7 +46,7 @@ Copy-Item .env.example .env
 
 In `.env`, set `OPENAI_API_KEY`, `FFMPEG_PATH`, and `FFPROBE_PATH`. The latter two should be full executable paths or names on PATH. The optional `OPENAI_TEXT_MODEL` defaults to `gpt-4.1-mini-2025-04-14`. Use an account with access to that model and Whisper transcription.
 
-The launcher uses `scripts/runtime.json` when present, otherwise Python and Node from PATH. A local runtime file can specify `python` and `node` executable paths. On another computer, remove or update that ignored file. The current computer's runtime and downloaded executables are in the sibling `../../work/video-flashcards-runtime` folder; keep that folder when using the configured launcher here.
+The launcher uses `scripts/runtime.json` when configured, then prefers `.venv/Scripts/python.exe`, then Python from PATH. Node uses its configured path or PATH. A local runtime file can specify `python` and `node` executable paths. On another computer, remove or update that ignored file. The current computer's runtime and downloaded executables are in the sibling `../../work/video-flashcards-runtime` folder; keep that folder when using the configured launcher here.
 
 ## Data and provider use
 

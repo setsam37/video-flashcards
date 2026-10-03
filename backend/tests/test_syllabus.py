@@ -42,3 +42,9 @@ def test_preparing_stored_transcript_never_generates_cards(repo):
     assert repo.get_lecture('lesson').cards==[]
     assert len(repo.get_lecture('lesson').syllabus)==1
     assert all(j.kind=='prepare' for j in repo.get_lecture('lesson').jobs)
+
+def test_partial_chapters_infer_topics_in_uncovered_gap_without_changing_instructor_bounds():
+    chapters=[ChapterSeed(title='Introduction',start=0,end=120),ChapterSeed(title='Conclusion',start=480,end=600)]
+    proposals=[SyllabusProposal(title='Caching strategies',start=120,end=300,parent_start=None,point_summaries=['Cache hits','Cache misses'],source_segment_ids=['s1']),SyllabusProposal(title='Eviction strategies',start=300,end=480,parent_start=None,point_summaries=['LRU','Capacity'],source_segment_ids=['s2'])]
+    nodes=build_syllabus(source(chapters),segments(),Provider(proposals))
+    assert [(n.title,n.start,n.end,n.inferred) for n in nodes if n.parent_id is None]==[('Introduction',0,120,False),('Caching strategies',120,300,True),('Eviction strategies',300,480,True),('Conclusion',480,600,False)]

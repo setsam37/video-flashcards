@@ -18,7 +18,9 @@ Every example card's primary timestamp falls inside the selected chapter, every 
 - Origin checks accept the local bound port, reject external origins and malformed ports, and reject untrusted Host headers.
 - Hidden PowerShell launcher started the API and worker; stop verifies recorded process executable, creation time, and command before termination. A regression test covers the Windows console-host child process.
 
-Final post-review counts and fixes will be recorded below.
+The independent review identified two important behavior defects: reloading an older lecture opened the newest import, and partially missing chapter metadata prevented inferred topics in the gaps. Both were reproduced with failing tests and fixed. A setup issue was also fixed so a fresh installation uses its local virtual environment. The final suite passed **62 backend tests (including a real API connection), 14 frontend tests, TypeScript checking, and the production build**. The two-lecture reload fix also passed in the browser, retaining the older lecture's second card and answer side. No critical findings were reported.
+
+One minor accessibility improvement is deferred: Enter on the focusable card area does not flip it. Clicking, Space, and the explicit Flip button work.
 
 ## Browser checks
 
@@ -30,6 +32,7 @@ The complete flow was exercised through the supplied browser tools against an is
 - Right arrow advanced to card 2 and reset its answer side; Space flipped it. Reload retained card 2 and the answer side.
 - A later selected chapter failed deliberately. The completed first chapter's 3 cards survived. Retry finished the remaining chapter, yielding 4 cards.
 - Studying one topic included only that topic's card.
+- A whole-lecture mix included all 4 generated fixture cards.
 - The study layout at 390 pixels wide had a 390-pixel document width and no horizontal overflow. The desktop layout and real lecture workspace were visually inspected.
 
 The Node Playwright runner could not start its worker inside this Windows sandbox (`spawn EPERM`). Its portable test and config are retained for running in a normal terminal; the equivalent browser flow above passed here. Offline fixture checks are distinct from the real lecture/provider checks.

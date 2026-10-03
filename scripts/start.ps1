@@ -3,8 +3,9 @@ $ErrorActionPreference = 'Stop'
 $appRoot = Split-Path -Parent $PSScriptRoot
 $runtimePath = Join-Path $PSScriptRoot 'runtime.json'
 $runtime = if (Test-Path -LiteralPath $runtimePath) { Get-Content -LiteralPath $runtimePath -Raw | ConvertFrom-Json } else { $null }
-$pythonExe = if ($runtime) { $runtime.python } else { (Get-Command python).Source }
-$nodeExe = if ($runtime) { $runtime.node } else { (Get-Command node).Source }
+. (Join-Path $PSScriptRoot 'runtime.ps1')
+$pythonExe = Get-RecallPython -AppRoot $appRoot -Runtime $runtime
+$nodeExe = if ($runtime -and $runtime.node) { $runtime.node } else { (Get-Command node).Source }
 $dataPath = Join-Path $appRoot 'data'
 $logsPath = Join-Path $dataPath 'logs'
 New-Item -ItemType Directory -Force -Path $logsPath | Out-Null
