@@ -43,3 +43,14 @@ def test_upload_does_not_preserve_client_path(client,repo):
     source=repo.get_source(result.json()['lecture_id'])
     assert Path(source.media_path).parent==repo.path.parent/'media'
     assert Path(source.media_path).name!='evil.mp4'
+
+def test_same_local_origin_works_on_the_bound_test_port(client):
+    bound=TestClient(client.app,base_url='http://127.0.0.1:8001')
+    assert bound.post('/api/lectures/youtube',json={'url':'https://youtu.be/C842vFY5kRo'},headers={'Origin':'http://127.0.0.1:8001'}).status_code==200
+
+def test_untrusted_host_is_rejected(client):
+    assert client.get('/api/lectures',headers={'Host':'untrusted.example'}).status_code==400
+
+def test_invalid_origin_port_is_rejected_without_server_error(client):
+    safe=TestClient(client.app,raise_server_exceptions=False)
+    assert safe.post('/api/lectures/youtube',json={'url':'https://youtu.be/C842vFY5kRo'},headers={'Origin':'http://localhost:bad'}).status_code==403

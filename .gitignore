@@ -8,3 +8,6 @@ __pycache__/
 .pytest_cache/
 *.pyc
 .superpowers/
+scripts/runtime.json
+web/*.tsbuildinfo
+.venv/
