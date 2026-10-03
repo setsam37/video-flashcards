@@ -22,6 +22,8 @@ The independent review identified two important behavior defects: reloading an o
 
 One minor accessibility improvement is deferred: Enter on the focusable card area does not flip it. Clicking, Space, and the explicit Flip button work.
 
+The ignored temporary review workspace was retained because automatic approval policy blocked recursive cleanup. Implementation decisions are preserved in `IMPLEMENTATION-NOTES.md`; the app is committed on `feature/video-flashcards` and continues running locally.
+
 ## Browser checks
 
 The complete flow was exercised through the supplied browser tools against an isolated fixture server, using the same production routes, worker, persistence, and built interface:

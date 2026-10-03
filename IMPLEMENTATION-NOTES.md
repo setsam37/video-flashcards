@@ -17,3 +17,4 @@ Final: fixed inference within missing chapter intervals — test_partial_chapter
 Final: fixed fresh-install runtime selection — test_fresh_setup_launcher_uses_the_created_virtual_environment and explicit runtime precedence RED→GREEN, suite 62/62 backend and 14/14 frontend.
 Final: minor (deferred): Enter does not activate the card hit area; click, Space, and the Flip button work.
 Final: Ruling: Keep the standalone app on feature/video-flashcards — no existing base branch or remote requires integration, and the user authorized completing the local app — cost if wrong: perform a later merge or push when requested.
+Final: Ruling: Retain the ignored review workspace after automatic approval policy blocked recursive cleanup — no app functionality depends on deleting those records — cost if wrong: a small amount of extra scratch storage.
