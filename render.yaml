@@ -8,7 +8,6 @@ services:
     numInstances: 1
     autoDeployTrigger: checksPass
     healthCheckPath: /api/health
-    maxShutdownDelaySeconds: 30
     disk:
       name: recall-data
       mountPath: /var/data
