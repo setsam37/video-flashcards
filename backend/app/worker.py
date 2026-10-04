@@ -11,8 +11,14 @@ def run_once(queue,handlers):
 class WorkspaceWorker:
     def __init__(self,config):
         self.config=config;self.workspaces={}
+        from .worker_lease import WorkerLease
+        self.lease=WorkerLease(config.database_url.get_secret_value()) if config.database_url.get_secret_value() else None
+
+    def close(self):
+        if self.lease:self.lease.close()
 
     def tick(self):
+        if self.lease and not self.lease.acquire():return False
         import re
         from .storage import repository_for
         from .database import AccountRegistry
@@ -45,6 +51,12 @@ def main():
     config=Config().prepare();worker=WorkspaceWorker(config)
     def heartbeat():
         while True:
+            if worker.lease:
+                try:worker.lease.check()
+                except DatabaseUnavailable:
+                    # Lost ownership must terminate in-flight processing. The
+                    # supervisor stops the API; the next worker recovers jobs.
+                    __import__('os')._exit(1)
             pending=config.data_dir/'worker-heartbeat.tmp'
             pending.write_text(str(time.time()));pending.replace(config.data_dir/'worker-heartbeat');time.sleep(2)
     threading.Thread(target=heartbeat,daemon=True).start()

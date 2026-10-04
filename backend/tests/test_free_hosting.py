@@ -80,11 +80,12 @@ def test_remote_worker_discovers_accounts_after_local_directory_loss(tmp_path,mo
     assert worker.tick()
     assert visited==[result['lecture_id']]
     assert JobQueue(repo).get(result['job_id']).status=='succeeded'
+    worker.close()
 
 def test_remote_workers_do_not_recover_each_others_running_jobs(tmp_path):
     url=os.environ.get('TEST_DATABASE_URL')
     if not url:pytest.skip('Disposable PostgreSQL is supplied by CI')
-    from app.database import WorkerLease
+    from app.worker_lease import WorkerLease
     first=WorkerLease(url);second=WorkerLease(url)
     try:
         assert first.acquire()

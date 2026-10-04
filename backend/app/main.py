@@ -17,8 +17,8 @@ def create_app(config: Config | None = None):
     app=FastAPI(title='Lecture Cards',docs_url=None if hosted else '/docs',redoc_url=None if hosted else '/redoc',openapi_url=None if hosted else '/openapi.json')
     app.state.config=config
     app.state.repository=repository_for(config)
-    install_security(app,config)
     if not config.video_uploads_enabled:app.add_middleware(CaptionBodyLimit)
+    install_security(app,config)
     @app.exception_handler(DatabaseUnavailable)
     async def database_error(request,error):return JSONResponse(status_code=503,content={'detail':str(error)})
     @app.exception_handler(ProcessingError)
