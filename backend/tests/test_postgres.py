@@ -72,6 +72,19 @@ def test_postgres_transaction_rollback(pg):
             raise RuntimeError('Simulate processing interruption')
     assert repo.get_source('one').title=='Durable lecture'
 
+def test_postgres_generation_reuses_cards_and_rolls_back_failed_replacement(pg):
+    from test_generation import seed,run,Provider
+    from app.errors import ProcessingError
+    repo,_,_=pg
+    repo.save_source(source('lesson').model_copy(update={'duration':600}))
+    seed(repo);run(repo,[(0,300)]);first=repo.get_lecture('lesson').cards[0]
+    run(repo,[(0,600)])
+    before=repo.get_lecture('lesson')
+    assert first in before.cards and len(before.cards)==2
+    with pytest.raises(ProcessingError):run(repo,[(0,600)],Provider(True),True)
+    assert repo.get_lecture('lesson').cards==before.cards
+    assert repo.get_lecture('lesson').completed_intervals==before.completed_intervals
+
 def test_postgres_sessions_and_one_use_states_survive_restart(pg,tmp_path):
     _,url,_=pg
     store=SessionStore(tmp_path/'auth.sqlite',database_url=url)

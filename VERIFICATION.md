@@ -54,3 +54,11 @@ The hosted source is prepared; no live Render service or Google OAuth client has
 - Restarted the local app and confirmed the existing library still contains its lecture, 22 topics, and 8 cards. Browser checks confirmed the syllabus, flip answer, and timestamp link remain usable.
 
 Live Google login, a real hosted video import/upload, hosted generation/study, and operator backup restoration remain to be checked after the user configures Render and Google. See `HOSTING.md` for those steps. Passing fixture/container checks does not establish live provider availability or deployment completion.
+
+## Free backend preparation — October 4, 2026
+
+The default deployment now uses Render Free with no disk and an external Supabase PostgreSQL database. Local SQLite/uploads are preserved. Free hosted import supports YouTube and SRT/VTT, and the frontend offers caption recovery for both missing captions and blocked metadata. Private account data, sessions, jobs, completed ranges, and the account registry are durable; overlapping deployments share a database-backed worker ownership lock.
+
+Local verification after the persistence changes: 93 backend tests passed, 9 skipped (real PostgreSQL supplied by CI and opt-in provider test); 22 frontend tests and both TypeScript/Vite builds passed before the final caption-recovery test. Real PostgreSQL checks passed in [CI run 37167882253](https://github.com/setsam37/video-flashcards/actions/runs/37167882253) for commit `a94239b`: persistence after deleting local directories, account isolation, concurrent handoffs/claims, opaque session persistence, one-use OAuth states, precise expiry, rollback, remote worker discovery, and single worker ownership. That run used the earlier SQLite container smoke; the updated free-container smoke is verified separately below when complete.
+
+No live free backend or Google client has been configured yet. Supabase sign-in, project credentials, Render configuration, real Google login, and real hosted generation remain required before connecting Pages. No paid resources or payment details were added.

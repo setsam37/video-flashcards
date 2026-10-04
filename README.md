@@ -56,7 +56,7 @@ The launcher uses `scripts/runtime.json` when configured, then prefers `.venv/Sc
 
 ## Data and provider use
 
-The key stays in the ignored backend `.env` locally or in server environment settings when hosted, and is never sent to the browser. Lectures, jobs, media, and decks are stored under the ignored `data` folder locally and a persistent disk when hosted. Back up this folder together with the app if you want to retain your library. Provider calls incur charges on your OpenAI account: uploaded audio goes to Whisper, and transcript excerpts go to the text model for syllabus, point extraction, cards, and evidence checking. Text calls use `store=False`. Hosted mode supports invited Google accounts with separate libraries; there is no user billing or sharing feature.
+The key stays in the ignored backend `.env` locally or in server environment settings when hosted, and is never sent to the browser. Local lessons and videos remain under the ignored `data` folder. Free hosted lessons, transcripts, cards, jobs, and sessions persist in a private Supabase PostgreSQL database; the Render server uses no paid disk. Hosted import supports YouTube/captions; original video upload/transcription is local. Back up local data and the hosted database separately. Provider calls incur charges on your OpenAI account: uploaded audio goes to Whisper, and transcript excerpts go to the text model for syllabus, point extraction, cards, and evidence checking. Text calls use `store=False`. Hosted mode supports invited Google accounts with separate libraries; there is no user billing or sharing feature.
 
 This version uses audio/captions rather than video frames. Captions can contain errors, and model evidence checks are imperfect; supporting excerpts let you inspect an answer. Visual-only diagrams and code are flagged when identified. English YouTube captions are preferred. If YouTube captions are unavailable, attach SRT/VTT captions or upload the video. If metadata itself fails, upload the video or retry later. A timestamped caption file must belong to the original lecture.
 
@@ -68,6 +68,8 @@ python -m pytest backend/tests -q
 npm --prefix web test -- --run
 npm --prefix web run build
 ```
+
+PostgreSQL integration checks run when `TEST_DATABASE_URL` points to a disposable test database. GitHub Actions supplies PostgreSQL 17 and also replaces the complete Docker container to verify data survives free-server filesystem loss. Do not point integration tests at a real library database.
 
 Live checks are explicitly opt-in and consume API credits:
 

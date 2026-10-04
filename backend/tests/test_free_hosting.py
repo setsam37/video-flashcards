@@ -37,6 +37,14 @@ def test_free_hosting_requires_durable_encrypted_database(tmp_path):
         settings(tmp_path,ephemeral_hosting=True,video_uploads_enabled=False)
     with pytest.raises(ValueError,match='encrypted|TLS|sslmode'):
         settings(tmp_path,database_url='postgresql://postgres:fake@example.test/postgres?sslmode=disable')
+    with pytest.raises(ValueError,match='encrypted|TLS|sslmode'):
+        settings(tmp_path,database_url='postgresql://postgres:fake@example.test/postgres?sslmode=require&sslmode=disable')
+
+def test_configuration_errors_do_not_print_private_credentials(tmp_path):
+    key='fake-private-test-credential'
+    try:Config(_env_file=None,data_dir=tmp_path,app_mode='hosted',openai_api_key=key)
+    except ValueError as error:assert key not in str(error)
+    else:pytest.fail('Incomplete hosted configuration must fail closed')
 
 def test_database_outage_returns_generic_response_without_credentials(tmp_path,monkeypatch):
     from app.database import DatabaseUnavailable

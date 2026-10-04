@@ -3,22 +3,22 @@ services:
     name: recall-video-flashcards
     runtime: docker
     branch: main
-    plan: 1c-2g
+    plan: free
     region: ohio
     numInstances: 1
     autoDeployTrigger: checksPass
     healthCheckPath: /api/health
-    disk:
-      name: recall-data
-      mountPath: /var/data
-      sizeGB: 10
     envVars:
       - key: APP_MODE
         value: hosted
       - key: DATA_DIR
-        value: /var/data
-      - key: UPLOAD_LIMIT_BYTES
-        value: "1073741824"
+        value: /tmp/recall
+      - key: EPHEMERAL_HOSTING
+        value: "true"
+      - key: VIDEO_UPLOADS_ENABLED
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
       - key: PAGES_ORIGIN
         value: https://setsam37.github.io
       - key: PUBLIC_SIGNUP

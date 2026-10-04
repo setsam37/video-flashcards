@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 APP_ROOT = Path(__file__).resolve().parents[2]
 
 class Config(BaseSettings):
-    model_config = SettingsConfigDict(env_file=APP_ROOT / '.env',extra='ignore')
+    model_config = SettingsConfigDict(env_file=APP_ROOT / '.env',extra='ignore',hide_input_in_errors=True)
     data_dir: Path = APP_ROOT / 'data'
     openai_api_key: SecretStr = SecretStr('')
     openai_text_model: str = 'gpt-4.1-mini-2025-04-14'
@@ -38,8 +38,11 @@ class Config(BaseSettings):
                 raise ValueError('Ephemeral hosting requires DATABASE_URL and disabled video uploads.')
             if database_url:
                 parsed_db=urlparse(database_url)
-                if parsed_db.scheme not in ['postgres','postgresql'] or not parsed_db.hostname or parse_qs(parsed_db.query).get('sslmode',[''])[0] not in ['require','verify-ca','verify-full']:
+                modes=parse_qs(parsed_db.query).get('sslmode',[])
+                if parsed_db.scheme not in ['postgres','postgresql'] or not parsed_db.hostname or len(modes)!=1 or modes[0] not in ['require','verify-ca','verify-full']:
                     raise ValueError('Hosted database connections require encrypted TLS (sslmode=require or verify-full).')
+                if parsed_db.hostname.endswith('.pooler.supabase.com') and parsed_db.port==6543:
+                    raise ValueError('Use the Supabase session pooler on port 5432, not the transaction pooler.')
             self.public_app_url=(self.public_app_url or self.render_external_url).rstrip('/')
             for value in [self.public_app_url,self.pages_origin]:
                 parsed=urlparse(value)

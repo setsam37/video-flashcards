@@ -2,6 +2,14 @@ import {render,screen} from '@testing-library/react';
 import {beforeEach,expect,test,vi} from 'vitest';
 import App from './App';
 beforeEach(()=>sessionStorage.clear());
+
+test('free online app offers caption recovery when YouTube metadata is blocked',async()=>{
+ const lesson={id:'blocked',title:'YouTube lecture',duration:0,source_kind:'youtube',youtube_id:'C842vFY5kRo',media_url:null,syllabus:[],cards:[],gaps:[],completed_intervals:[],jobs:[{id:'job',lecture_id:'blocked',kind:'prepare',stage:'importing',status:'failed',selected_intervals:[],regenerate:false,completed_units:0,total_units:null,error_code:'youtube_unavailable',error_message:'YouTube metadata could not be retrieved.'}]};
+ vi.stubGlobal('fetch',async(input:RequestInfo|URL)=>new Response(JSON.stringify(String(input).endsWith('/health')?{status:'ok',provider_configured:true,video_uploads_enabled:false}:String(input).endsWith('/lectures')?[{id:'blocked',title:lesson.title,duration:0}]:lesson),{status:200,headers:{'Content-Type':'application/json'}}));
+ render(<App hosted/>);
+ expect(await screen.findByLabelText('Attach transcript')).toBeInTheDocument();
+ vi.unstubAllGlobals();
+});
 test('a prepared syllabus has no automatic flashcards and empty selection disables generation',async()=>{
  const lesson={id:'lesson',title:'Test lecture',duration:600,source_kind:'youtube',youtube_id:'C842vFY5kRo',media_url:null,syllabus:[{id:'p',title:'Actual chapter',start:0,end:600,parent_id:null,inferred:false}],cards:[],gaps:[],completed_intervals:[],jobs:[]};
  vi.stubGlobal('fetch',async(input:RequestInfo|URL)=>new Response(JSON.stringify(String(input).endsWith('/health')?{status:'ok',provider_configured:true}:String(input).endsWith('/lectures')?[{id:'lesson',title:'Test lecture',duration:600}]:lesson),{status:200,headers:{'Content-Type':'application/json'}}));
