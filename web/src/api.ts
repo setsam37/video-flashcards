@@ -13,7 +13,7 @@ async function request<T>(path:string,init?:RequestInit):Promise<T>{
 export const api={
  handoff:()=>request<{lecture_id:string;job_id:string}>('/handoff',{method:'POST'}),
  logout:()=>request<{signed_out:boolean}>('/auth/logout',{method:'POST'}),
- health:()=>request<{status:string;provider_configured:boolean}>('/health'),
+ health:()=>request<{status:string;provider_configured:boolean;video_uploads_enabled:boolean}>('/health'),
  list:()=>request<LectureSummary[]>('/lectures'),
  lecture:(id:string)=>request<LectureView>('/lectures/'+id),
  youtube:(url:string)=>request<{lecture_id:string;job_id:string}>('/lectures/youtube',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})}),

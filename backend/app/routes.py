@@ -21,6 +21,9 @@ def source_or_404(repo,id):
     except KeyError:raise HTTPException(404,'Lecture not found') from None
 
 async def store_video(video,config):
+    if not config.video_uploads_enabled:
+        await video.close()
+        raise HTTPException(413,'Online study supports YouTube links and captions. Use the local app for video uploads.')
     suffix=Path((video.filename or '').replace('\\','/')).suffix.lower()
     if suffix not in ['.mp4','.webm']:raise HTTPException(422,'Upload an MP4 or WebM video.')
     path=config.data_dir/'media'/f'{uuid.uuid4().hex}{suffix}'
@@ -62,6 +65,9 @@ def youtube(body:YouTubeRequest,request:Request):
 
 @router.post('/lectures/{id}/transcript')
 async def transcript(id:str,request:Request,transcript:UploadFile=File(),video:UploadFile|None=File(default=None)):
+    if video and not request_config(request).video_uploads_enabled:
+        await video.close();await transcript.close()
+        raise HTTPException(413,'Use the local app for video uploads. Online study supports YouTube links and captions.')
     repo=repository(request);source=source_or_404(repo,id);view=repo.get_lecture(id)
     if view.cards:raise HTTPException(409,'Import a new lecture to replace a transcript with existing cards.')
     if any(j.status in ['queued','running'] for j in view.jobs):raise HTTPException(409,'Wait for current processing to finish before attaching a transcript.')

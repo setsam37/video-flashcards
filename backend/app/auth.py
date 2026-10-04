@@ -4,24 +4,29 @@ from fastapi import APIRouter,Request,HTTPException
 from fastapi.responses import JSONResponse,RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.concurrency import run_in_threadpool
 from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.base_client.errors import OAuthError
 from joserfc.errors import JoseError
 from httpx2 import HTTPError
 from .sessions import SessionStore,COOKIE
-from .storage import Repository
+from .storage import repository_for
+from .database import AccountRegistry,DatabaseUnavailable
 
 router=APIRouter(prefix='/auth')
 
 def permitted(config,email):return config.public_signup or email.lower() in config.allowed_emails
 
 def workspace(config,sub):
-    return config.model_copy(update={'data_dir':config.data_dir/'accounts'/hashlib.sha256(sub.encode()).hexdigest()}).prepare()
+    account=hashlib.sha256(sub.encode()).hexdigest()
+    scoped=config.model_copy(update={'data_dir':config.data_dir/'accounts'/account,'workspace_id':account}).prepare()
+    if config.database_url.get_secret_value():AccountRegistry(config.database_url.get_secret_value()).register(account)
+    return scoped
 
 def install_security(app,config):
     hosted=config.app_mode=='hosted'
     if hosted:
-        app.state.sessions=SessionStore(config.data_dir/'auth.sqlite')
+        app.state.sessions=SessionStore(config.data_dir/'auth.sqlite',config.database_url.get_secret_value())
         oauth=OAuth()
         oauth.register('google',client_id=config.google_client_id,client_secret=config.google_client_secret.get_secret_value(),server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',client_kwargs={'scope':'openid email','code_challenge_method':'S256'})
         app.state.oauth=oauth
@@ -29,15 +34,21 @@ def install_security(app,config):
     async def protect(request,call_next):
         request.state.user=None
         if hosted:
-            user=app.state.sessions.get(request.cookies.get(COOKIE))
+            try:user=await run_in_threadpool(app.state.sessions.get,request.cookies.get(COOKIE))
+            except DatabaseUnavailable as error:return JSONResponse(status_code=503,content={'detail':str(error)})
             if user and permitted(config,user['email']):request.state.user=user
             private=request.url.path.startswith('/api/') and request.url.path!='/api/health' or request.url.path=='/auth/logout'
             if private:
                 if not request.state.user:return JSONResponse(status_code=401,content={'detail':'Sign in with Google to open your library.'})
-                scoped=workspace(config,user['sub']);request.state.config=scoped;request.state.repository=Repository(scoped.data_dir/'study.sqlite')
+                try:
+                    scoped=await run_in_threadpool(workspace,config,user['sub']);request.state.config=scoped
+                    request.state.repository=await run_in_threadpool(repository_for,scoped)
+                except DatabaseUnavailable as error:return JSONResponse(status_code=503,content={'detail':str(error)})
                 if request.method not in ['GET','HEAD','OPTIONS']:
                     supplied=request.headers.get('X-CSRF-Token','')
                     if not hmac.compare_digest(supplied,user['csrf']):return JSONResponse(status_code=403,content={'detail':'Reload the app before trying again.'})
+                if request.method=='POST' and request.url.path=='/api/lectures/upload' and not config.video_uploads_enabled:
+                    return JSONResponse(status_code=413,content={'detail':'Online study supports YouTube links and captions. Use the local app for video uploads.'})
         origin=request.headers.get('origin')
         if request.method not in ['GET','HEAD','OPTIONS'] and origin:
             try:
@@ -63,7 +74,7 @@ def session(request:Request):
     from .handoff import pending_handoff
     pending=pending_handoff(request)
     if pending:
-        repo=Repository(workspace(request.app.state.config,user['sub']).data_dir/'study.sqlite')
+        repo=repository_for(workspace(request.app.state.config,user['sub']))
         pending=not repo.handoff_result(pending['id'])
     return {'hosted':True,'authenticated':True,'email':user['email'],'csrf_token':user['csrf'],'pending':bool(pending)}
 

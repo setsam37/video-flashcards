@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlparse
+from urllib.parse import urlparse,parse_qs
 from pydantic import SecretStr,model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,11 +24,22 @@ class Config(BaseSettings):
     session_secret: SecretStr = SecretStr('')
     allowed_emails: list[str] = []
     public_signup: bool = False
+    database_url: SecretStr = SecretStr('')
+    workspace_id: str = 'root'
+    video_uploads_enabled: bool = True
+    ephemeral_hosting: bool = False
 
     @model_validator(mode='after')
     def validate_hosting(self):
         self.allowed_emails=[email.strip().lower() for email in self.allowed_emails if email.strip()]
         if self.app_mode=='hosted':
+            database_url=self.database_url.get_secret_value()
+            if self.ephemeral_hosting and (not database_url or self.video_uploads_enabled):
+                raise ValueError('Ephemeral hosting requires DATABASE_URL and disabled video uploads.')
+            if database_url:
+                parsed_db=urlparse(database_url)
+                if parsed_db.scheme not in ['postgres','postgresql'] or not parsed_db.hostname or parse_qs(parsed_db.query).get('sslmode',[''])[0] not in ['require','verify-ca','verify-full']:
+                    raise ValueError('Hosted database connections require encrypted TLS (sslmode=require or verify-full).')
             self.public_app_url=(self.public_app_url or self.render_external_url).rstrip('/')
             for value in [self.public_app_url,self.pages_origin]:
                 parsed=urlparse(value)
