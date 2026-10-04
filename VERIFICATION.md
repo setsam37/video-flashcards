@@ -42,3 +42,15 @@ The Node Playwright runner could not start its worker inside this Windows sandbo
 ## Limits
 
 The actual uploaded-video Whisper path was implemented and covered with chunk/offset tests; a full user lecture upload has not yet been supplied. The real example used its public captions. Visual frame analysis, extra supporting explanations, spaced repetition, sharing, and exports are outside this first version. Model-based topic extraction and answer checking can make mistakes; timestamped evidence is included for review.
+# Hosted setup verification — October 3, 2026
+
+The hosted source is prepared; no live Render service or Google OAuth client has been configured. GitHub Pages remains the existing unconnected entry screen until those live checks pass.
+
+- Local backend: **85 passed, 1 skipped** (optional paid-provider check). Tests cover real signed OIDC validation, state replay, revocable sessions, invitations, CSRF, cross-account library/media/job denial, bounded Pages handoff, idempotent import, account worker queues, health, and process shutdown.
+- Frontend: **20 passed**; TypeScript and normal/Pages production builds passed. The connected Pages/AuthGate tests also passed with the backend URL configured.
+- Independent review: two Important findings fixed and regression-tested—local supervisor loopback binding and checking SameSite sessions after the cross-site POST redirects to a GET. No remaining Critical or Important findings reported.
+- [GitHub container verification](https://github.com/setsam37/video-flashcards/actions/runs/37165351898) passed for implementation commit `3ca80c466eadd403be10f80a434dcda5b6c77152`: clean dependency install, backend/frontend tests, both builds, actual Docker build, FFmpeg, signed-out private-route denial, database/file persistence after restart, and full container shutdown when the worker exits. All CI credentials were fabricated; no Google/OpenAI calls were made.
+- Source, generated assets, and 146 historical Git blobs had no configured OpenAI key, recognizable credential patterns, or ignored private data in history. The private invited email was also excluded from source and assets.
+- Restarted the local app and confirmed the existing library still contains its lecture, 22 topics, and 8 cards. Browser checks confirmed the syllabus, flip answer, and timestamp link remain usable.
+
+Live Google login, a real hosted video import/upload, hosted generation/study, and operator backup restoration remain to be checked after the user configures Render and Google. See `HOSTING.md` for those steps. Passing fixture/container checks does not establish live provider availability or deployment completion.
