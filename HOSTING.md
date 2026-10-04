@@ -17,7 +17,7 @@ Sources: [Render Free](https://render.com/docs/free), [Supabase pricing](https:/
 ## Prepare Supabase
 
 1. Sign in to [Supabase](https://supabase.com/dashboard), create or select a **Free organization**, then create a dedicated Free project named `Recall`. Choose a US region near the Render service. Enter a strong database password privately and retain it in your password manager.
-2. In the project's **Connect** panel, select **Session pooler** (IPv4, port **5432**). Copy its PostgreSQL connection URI. Replace the password placeholder privately, URL-encoding special characters, and append `?sslmode=require` (or `&sslmode=require` if it already has a query). This connection string is a secret. Use the session pooler, not the transaction pooler on port 6543; the worker needs a session-level advisory lock.
+2. In the project's **Connect** panel, select **Session pooler** (IPv4, port **5432**). Copy its PostgreSQL connection URI. Replace the password placeholder privately, URL-encoding special characters, and append `?sslmode=require` (or `&sslmode=require` if it already has a query). This encrypts the connection. For server identity verification, prefer `sslmode=verify-full` with Supabase's database CA certificate supplied privately as `sslrootcert`; encryption alone does not verify the certificate/hostname. This connection string is a secret. Use the session pooler, not the transaction pooler on port 6543; the worker needs a session-level advisory lock.
 3. Supply the URI as `DATABASE_URL` in Render's private environment settings. Do not put it in Pages, GitHub Actions variables, chat, or tracked files.
 4. The app creates private `recall_<hash>` schemas automatically. Leave those schemas out of Supabase's exposed API schemas. The app revokes schema/table access from public, anonymous, and authenticated API roles. It connects server-side using the database owner; no Supabase service-role key or browser database client is needed.
 
@@ -66,7 +66,7 @@ The workflow checks backend health before replacing the entry page. Subsequent m
 
 ## Operation and backups
 
-The container supervises one API and one worker. A PostgreSQL session advisory lock permits only one active worker across overlapping deployments. Losing that database session terminates processing; a successor recovers interrupted jobs. Private responses are not cacheable, cookies are Secure/HttpOnly, and sign-out revokes sessions and clears tab study progress.
+The container supervises one API and one worker. A PostgreSQL session advisory lock permits only one active worker across overlapping deployments. A durable ownership token is checked and row-locked in each worker database transaction, so an obsolete worker cannot overwrite successor results. Losing the lease or encountering a database failure terminates the worker and API; the restarted worker recovers interrupted jobs as retryable. Private responses are not cacheable, cookies are Secure/HttpOnly, and sign-out revokes sessions and clears tab study progress.
 
 Supabase stores the durable account registry, account schemas, and session schema. Temporary directories under `/tmp/recall` contain only runtime files and worker heartbeat. In local mode, SQLite, videos, and transcription checkpoints remain under the ignored `data/` directory.
 

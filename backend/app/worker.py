@@ -1,9 +1,11 @@
 def run_once(queue,handlers):
+    from .database import DatabaseUnavailable
     job=queue.claim()
     if not job:return False
     try:
         handlers[job.kind](job)
         queue.update(job.id,status='succeeded')
+    except DatabaseUnavailable:raise
     except Exception as error:
         queue.fail(job.id,getattr(error,'code','processing_failed'),getattr(error,'public_message','Processing failed. Retry the job or check local configuration.'))
     return True
@@ -36,8 +38,8 @@ class WorkspaceWorker:
         for path in paths:
             if path not in self.workspaces:
                 config=self.config.model_copy(update={'data_dir':path,'workspace_id':path.name if self.config.app_mode=='hosted' else 'root'}).prepare()
-                repo=repository_for(config);queue=JobQueue(repo);queue.recover_interrupted()
-                self.workspaces[path]=(repo,queue,OpenAIProvider(config))
+                repo=repository_for(config,self.lease.fence if self.lease else None);queue=JobQueue(repo);queue.recover_interrupted()
+                self.workspaces[path]=(repo,queue,OpenAIProvider(config,before_call=self.lease.check if self.lease else None))
             repo,queue,provider=self.workspaces[path]
             handlers={'prepare':lambda job:prepare_lecture(job,repo,provider),'generate':lambda job:generate_job(job,repo,provider)}
             worked=run_once(queue,handlers) or worked
@@ -60,9 +62,13 @@ def main():
             pending=config.data_dir/'worker-heartbeat.tmp'
             pending.write_text(str(time.time()));pending.replace(config.data_dir/'worker-heartbeat');time.sleep(2)
     threading.Thread(target=heartbeat,daemon=True).start()
-    while True:
-        try:
+    try:
+        while True:
             if not worker.tick():time.sleep(2)
-        except DatabaseUnavailable:time.sleep(5)
+    except DatabaseUnavailable:
+        # A failed DB write may leave a job running. Restart instead of keeping
+        # a cached workspace that can never recover that job.
+        raise SystemExit(1) from None
+    finally:worker.close()
 
 if __name__=='__main__':main()

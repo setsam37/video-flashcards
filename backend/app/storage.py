@@ -4,9 +4,9 @@ from .database import Database
 from .models import SourceDescriptor,TranscriptSegment,SyllabusNode,Card,Job,CoverageGap,Interval,LectureView
 
 class Repository:
-    def __init__(self,path: Path,database_url='',workspace_id='root'):
+    def __init__(self,path: Path,database_url='',workspace_id='root',worker_fence=None):
         self.path=Path(path)
-        self.database=Database(self.path,database_url,'library_'+workspace_id)
+        self.database=Database(self.path,database_url,'library_'+workspace_id,worker_fence)
         self.database.initialize(f'''
             CREATE TABLE IF NOT EXISTS sources({self.database.order_column}id TEXT PRIMARY KEY,payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS transcripts(lecture_id TEXT PRIMARY KEY REFERENCES sources(id),payload TEXT NOT NULL);
@@ -92,5 +92,5 @@ class Repository:
             merged=normalize(old+result.completed_intervals)
             db.execute('INSERT INTO covered VALUES (?,?) ON CONFLICT(lecture_id) DO UPDATE SET payload=excluded.payload',(id,json.dumps([i.model_dump() for i in merged])))
 
-def repository_for(config):
-    return Repository(config.data_dir/'study.sqlite',database_url=config.database_url.get_secret_value(),workspace_id=config.workspace_id)
+def repository_for(config,worker_fence=None):
+    return Repository(config.data_dir/'study.sqlite',database_url=config.database_url.get_secret_value(),workspace_id=config.workspace_id,worker_fence=worker_fence)

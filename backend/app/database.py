@@ -11,6 +11,8 @@ import hashlib,re,sqlite3
 class DatabaseUnavailable(Exception):
     def __init__(self):super().__init__('The study service is temporarily unavailable. Please try again shortly.')
 
+class WorkerOwnershipLost(DatabaseUnavailable):pass
+
 class PostgresConnection:
     def __init__(self,connection,schema):self.raw=connection;self.schema=schema
     def lock(self):
@@ -25,8 +27,9 @@ class PostgresConnection:
             if statement.strip():self.execute(re.sub(r'\bREAL\b','DOUBLE PRECISION',statement))
 
 class Database:
-    def __init__(self,path,database_url='',namespace='root'):
+    def __init__(self,path,database_url='',namespace='root',worker_fence=None):
         self.path=Path(path);self.url=database_url
+        self.worker_fence=worker_fence
         if not re.fullmatch(r'[a-zA-Z0-9_-]{1,80}',namespace):raise ValueError('Invalid database namespace')
         self.schema='recall_'+hashlib.sha256(namespace.encode()).hexdigest()[:48]
         self.order_column='rowid BIGSERIAL UNIQUE,' if self.url else ''
@@ -47,7 +50,9 @@ class Database:
                 with psycopg.connect(self.url,connect_timeout=10,prepare_threshold=None,row_factory=dict_row) as db:
                     db.execute(sql.SQL('SET LOCAL search_path TO {}').format(sql.Identifier(self.schema)))
                     db.execute("SET LOCAL statement_timeout = '30s'")
-                    yield PostgresConnection(db,self.schema)
+                    adapter=PostgresConnection(db,self.schema)
+                    if self.worker_fence:self.worker_fence(adapter)
+                    yield adapter
             except psycopg.Error:raise DatabaseUnavailable() from None
         else:
             db=sqlite3.connect(self.path,timeout=30);db.row_factory=sqlite3.Row
