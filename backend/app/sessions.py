@@ -1,21 +1,18 @@
-from contextlib import contextmanager
-import hashlib,secrets,sqlite3,time
+import hashlib,secrets,time
+from .database import Database
 
 COOKIE='recall_session'
 
 class SessionStore:
-    def __init__(self,path):
+    def __init__(self,path,database_url=''):
         self.path=path
-        with self.connection() as db:
-            db.execute('CREATE TABLE IF NOT EXISTS sessions(digest TEXT PRIMARY KEY,sub TEXT NOT NULL,email TEXT NOT NULL,csrf TEXT NOT NULL,expires REAL NOT NULL)')
-            db.execute('CREATE TABLE IF NOT EXISTS oauth_states(digest TEXT PRIMARY KEY,expires REAL NOT NULL)')
+        self.database=Database(path,database_url,'sessions')
+        self.database.initialize('''
+            CREATE TABLE IF NOT EXISTS sessions(digest TEXT PRIMARY KEY,sub TEXT NOT NULL,email TEXT NOT NULL,csrf TEXT NOT NULL,expires REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS oauth_states(digest TEXT PRIMARY KEY,expires REAL NOT NULL);
+        ''')
 
-    @contextmanager
-    def connection(self):
-        db=sqlite3.connect(self.path,timeout=30);db.row_factory=sqlite3.Row
-        try:yield db;db.commit()
-        except Exception:db.rollback();raise
-        finally:db.close()
+    def connection(self):return self.database.connection()
 
     def issue(self,sub,email):
         token=secrets.token_urlsafe(32);csrf=secrets.token_urlsafe(32)

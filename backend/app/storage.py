@@ -1,37 +1,28 @@
-from contextlib import contextmanager
 from pathlib import Path
-import json, sqlite3
+import json
+from .database import Database
 from .models import SourceDescriptor,TranscriptSegment,SyllabusNode,Card,Job,CoverageGap,Interval,LectureView
 
 class Repository:
-    def __init__(self,path: Path):
-        self.path=Path(path);self.path.parent.mkdir(parents=True,exist_ok=True)
-        with self.connection() as db:
-            db.executescript('''
-            CREATE TABLE IF NOT EXISTS sources(id TEXT PRIMARY KEY,payload TEXT NOT NULL);
+    def __init__(self,path: Path,database_url='',workspace_id='root'):
+        self.path=Path(path)
+        self.database=Database(self.path,database_url,'library_'+workspace_id)
+        self.database.initialize(f'''
+            CREATE TABLE IF NOT EXISTS sources({self.database.order_column}id TEXT PRIMARY KEY,payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS transcripts(lecture_id TEXT PRIMARY KEY REFERENCES sources(id),payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS nodes(lecture_id TEXT PRIMARY KEY REFERENCES sources(id),payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS cards(id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),primary_time REAL NOT NULL,payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS gaps(lecture_id TEXT NOT NULL REFERENCES sources(id),point_id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(lecture_id,point_id));
             CREATE TABLE IF NOT EXISTS covered(lecture_id TEXT PRIMARY KEY REFERENCES sources(id),payload TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),status TEXT NOT NULL,payload TEXT NOT NULL,request_key TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS jobs({self.database.order_column}id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),status TEXT NOT NULL,payload TEXT NOT NULL,request_key TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS handoffs(id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),job_id TEXT NOT NULL REFERENCES jobs(id));
             ''')
 
-    @contextmanager
-    def connection(self):
-        db=sqlite3.connect(self.path,timeout=30)
-        db.row_factory=sqlite3.Row
-        db.execute('PRAGMA foreign_keys=ON');db.execute('PRAGMA journal_mode=WAL')
-        try:
-            yield db;db.commit()
-        except Exception:
-            db.rollback();raise
-        finally: db.close()
+    def connection(self):return self.database.connection()
 
     def save_source(self,source):
         with self.connection() as db:
-            db.execute('INSERT INTO sources VALUES (?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',(source.lecture_id,source.model_dump_json()))
+            db.execute('INSERT INTO sources(id,payload) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',(source.lecture_id,source.model_dump_json()))
 
     def get_source(self,id):
         with self.connection() as db: row=db.execute('SELECT payload FROM sources WHERE id=?',(id,)).fetchone()
@@ -76,9 +67,9 @@ class Repository:
             db.execute('BEGIN IMMEDIATE')
             existing=db.execute('SELECT lecture_id,job_id FROM handoffs WHERE id=?',(id,)).fetchone()
             if existing:return dict(existing)
-            db.execute('INSERT INTO sources VALUES(?,?)',(source.lecture_id,source.model_dump_json()))
+            db.execute('INSERT INTO sources(id,payload) VALUES(?,?)',(source.lecture_id,source.model_dump_json()))
             key=json.dumps([source.lecture_id,'prepare',[],False],sort_keys=True)
-            db.execute('INSERT INTO jobs VALUES(?,?,?,?,?)',(job.id,source.lecture_id,'queued',job.model_dump_json(),key))
+            db.execute('INSERT INTO jobs(id,lecture_id,status,payload,request_key) VALUES(?,?,?,?,?)',(job.id,source.lecture_id,'queued',job.model_dump_json(),key))
             db.execute('INSERT INTO handoffs VALUES(?,?,?)',(id,source.lecture_id,job.id))
         return {'lecture_id':source.lecture_id,'job_id':job.id}
 
@@ -100,3 +91,6 @@ class Repository:
             old=[Interval.model_validate(x) for x in json.loads(row['payload'])] if row else []
             merged=normalize(old+result.completed_intervals)
             db.execute('INSERT INTO covered VALUES (?,?) ON CONFLICT(lecture_id) DO UPDATE SET payload=excluded.payload',(id,json.dumps([i.model_dump() for i in merged])))
+
+def repository_for(config):
+    return Repository(config.data_dir/'study.sqlite',database_url=config.database_url.get_secret_value(),workspace_id=config.workspace_id)
