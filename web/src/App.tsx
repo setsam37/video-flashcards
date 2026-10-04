@@ -9,7 +9,7 @@ import {StudyView} from './features/study/StudyView';
 import {createSession,readSession,saveSession,reconcileSession} from './features/study/session';
 import type {StudySession} from './features/study/session';
 
-export default function App(){
+export default function App({hosted=false}:{hosted?:boolean}){
  const [library,setLibrary]=useState<LectureSummary[]>([]),[id,setId]=useState<string|null>(null),[lecture,setLecture]=useState<LectureView|null>(null);
  const [selection,setSelection]=useState<Interval[]>([]),[showImport,setShowImport]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false),[configured,setConfigured]=useState<boolean|null>(null),[launch,setLaunch]=useState<StudyLaunch|null>(null);
  const activeId=useRef(id);activeId.current=id;
@@ -35,7 +35,7 @@ export default function App(){
   <div className="workspace-label">YOUR STUDY SPACE</div><button className="new-lecture" onClick={()=>setShowImport(true)}><Plus size={17}/>New lecture</button>
   <div className="library-heading"><BookOpen size={14}/>Your lectures<span>{library.length}</span></div><nav aria-label="Lecture library">{library.map(item=><button key={item.id} className={`library-item ${item.id===id?'active':''}`} onClick={()=>{setId(item.id);setShowImport(false);}}><span className="lecture-icon"><BookOpen size={17}/></span><span><strong>{item.title}</strong><small>{item.duration?timeLabel(item.duration):'Preparing syllabus'}</small></span></button>)}</nav>
   {!library.length&&<p className="sidebar-empty">Your lectures will live here.<br/>Start with a video you want to learn.</p>}
-  <div className="sidebar-bottom"><span className="status-dot"/>Saved on this computer<p>Your videos. Your pace.</p></div>
+  <div className="sidebar-bottom"><span className="status-dot"/>{hosted?'Saved in your private library':'Saved on this computer'}<p>Your videos. Your pace.</p></div>
  </aside><main className="main"><header className="topbar"><span><BookOpen size={16}/>Personal library</span><span className="local-badge">PERSONAL WORKSPACE</span></header><div className="main-content">
   {error&&<div className="notice error-message" role="alert">{error}</div>}
   {configured===false&&<details className="notice"><summary>Connect AI to prepare topics and generate cards</summary><p>Add your OpenAI API key to the app's local <code>.env</code> file and restart the service and worker. Credentials stay on the backend.</p></details>}

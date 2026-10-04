@@ -1,0 +1,35 @@
+name: Hosting checks
+on:
+  push:
+    branches: [main, feature/render-backend]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests-and-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: pip install -r backend/requirements.lock
+      - run: python -m pytest backend/tests -q
+        env:
+          PYTHONPATH: backend
+      - run: npm ci && npm test -- --run --pool=threads && npm run build && npm run build:pages
+        working-directory: web
+      - run: docker build -t recall:check .
+      - name: Smoke test container and persistent disk
+        run: python scripts/container_check.py
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs recall-check || true

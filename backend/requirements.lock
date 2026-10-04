@@ -32,3 +32,9 @@ typing_extensions==4.16.0
 uvicorn==0.54.0
 yt-dlp==2026.8.19
 psutil==7.2.2
+Authlib==1.8.0
+itsdangerous==2.2.0
+cryptography==50.0.2
+cffi==2.1.1
+pycparser==3.0
+joserfc==1.7.5

@@ -15,6 +15,7 @@ class Repository:
             CREATE TABLE IF NOT EXISTS gaps(lecture_id TEXT NOT NULL REFERENCES sources(id),point_id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(lecture_id,point_id));
             CREATE TABLE IF NOT EXISTS covered(lecture_id TEXT PRIMARY KEY REFERENCES sources(id),payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),status TEXT NOT NULL,payload TEXT NOT NULL,request_key TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS handoffs(id TEXT PRIMARY KEY,lecture_id TEXT NOT NULL REFERENCES sources(id),job_id TEXT NOT NULL REFERENCES jobs(id));
             ''')
 
     @contextmanager
@@ -62,6 +63,24 @@ class Repository:
     def list_lectures(self):
         with self.connection() as db: ids=[r['id'] for r in db.execute('SELECT id FROM sources ORDER BY rowid DESC')]
         return [{'id':id,'title':self.get_source(id).title,'duration':self.get_source(id).duration} for id in ids]
+
+    def handoff_result(self,id):
+        with self.connection() as db:row=db.execute('SELECT lecture_id,job_id FROM handoffs WHERE id=?',(id,)).fetchone()
+        return dict(row) if row else None
+
+    def import_handoff(self,id,video_id):
+        import uuid
+        source=SourceDescriptor(lecture_id=uuid.uuid4().hex,title='YouTube lecture',duration=0,source_kind='youtube',youtube_id=video_id)
+        job=Job(id=uuid.uuid4().hex,lecture_id=source.lecture_id,kind='prepare',stage='importing',status='queued',selected_intervals=[],regenerate=False)
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            existing=db.execute('SELECT lecture_id,job_id FROM handoffs WHERE id=?',(id,)).fetchone()
+            if existing:return dict(existing)
+            db.execute('INSERT INTO sources VALUES(?,?)',(source.lecture_id,source.model_dump_json()))
+            key=json.dumps([source.lecture_id,'prepare',[],False],sort_keys=True)
+            db.execute('INSERT INTO jobs VALUES(?,?,?,?,?)',(job.id,source.lecture_id,'queued',job.model_dump_json(),key))
+            db.execute('INSERT INTO handoffs VALUES(?,?,?)',(id,source.lecture_id,job.id))
+        return {'lecture_id':source.lecture_id,'job_id':job.id}
 
     def commit_generation(self,id,intervals,result,regenerate):
         from .syllabus.selection import normalize

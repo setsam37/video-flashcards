@@ -4,9 +4,9 @@ A personal, local app that turns a lecture into a chapter syllabus and flashcard
 
 ## GitHub Pages
 
-The public entry page is published at [setsam37.github.io/video-flashcards](https://setsam37.github.io/video-flashcards/). GitHub Pages serves static files and cannot run this app's Python processing worker. The entry page therefore explains that online generation is unavailable and links to the working local app. It does not send videos, credentials, or your library to GitHub.
+The public entry page is published at [setsam37.github.io/video-flashcards](https://setsam37.github.io/video-flashcards/). GitHub Pages serves static files and cannot run this app's Python processing worker. It keeps an unconnected notice until a server is configured. The Render setup supports Google sign-in and a separate private library per invited account. See [HOSTING.md](HOSTING.md) for setup and live verification; source preparation alone does not deploy a server.
 
-Build the Pages entry screen with `npm --prefix web run build:pages`. This writes `web/dist-pages` with relative asset paths suitable for a project Pages URL. Only those generated files and a `.nojekyll` marker belong on the `gh-pages` publishing branch. The normal build still writes `web/dist` and serves the full local app. A future online processing service is a separate deployment.
+Build the Pages entry screen with `npm --prefix web run build:pages`. This writes `web/dist-pages` with relative asset paths suitable for a project Pages URL. Only those generated files belong in the Pages deployment. The current site uses the `gh-pages` branch; the connected-site workflow publishes through GitHub Actions. The normal build still writes `web/dist` and serves the full local or hosted app. The Pages build receives only `VITE_APP_URL`, the public server origin, when processing is live.
 
 ## Open your app
 
@@ -56,7 +56,7 @@ The launcher uses `scripts/runtime.json` when configured, then prefers `.venv/Sc
 
 ## Data and provider use
 
-The key stays in the ignored backend `.env` and is never sent to the browser. Lectures, jobs, media, and decks are stored under the ignored `data` folder. Back up this folder together with the app if you want to retain your library. Provider calls incur charges on your OpenAI account: uploaded audio goes to Whisper, and transcript excerpts go to the text model for syllabus, point extraction, cards, and evidence checking. Text calls use `store=False`. No account, billing, or sharing feature is built into the app.
+The key stays in the ignored backend `.env` locally or in server environment settings when hosted, and is never sent to the browser. Lectures, jobs, media, and decks are stored under the ignored `data` folder locally and a persistent disk when hosted. Back up this folder together with the app if you want to retain your library. Provider calls incur charges on your OpenAI account: uploaded audio goes to Whisper, and transcript excerpts go to the text model for syllabus, point extraction, cards, and evidence checking. Text calls use `store=False`. Hosted mode supports invited Google accounts with separate libraries; there is no user billing or sharing feature.
 
 This version uses audio/captions rather than video frames. Captions can contain errors, and model evidence checks are imperfect; supporting excerpts let you inspect an answer. Visual-only diagrams and code are flagged when identified. English YouTube captions are preferred. If YouTube captions are unavailable, attach SRT/VTT captions or upload the video. If metadata itself fails, upload the video or retry later. A timestamped caption file must belong to the original lecture.
 

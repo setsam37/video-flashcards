@@ -1,5 +1,7 @@
 from pathlib import Path
-from pydantic import SecretStr
+from typing import Literal
+from urllib.parse import urlparse
+from pydantic import SecretStr,model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_ROOT = Path(__file__).resolve().parents[2]
@@ -13,9 +15,33 @@ class Config(BaseSettings):
     ffprobe_path: str = 'ffprobe'
     upload_limit_bytes: int = 4*1024**3
     provider_timeout: float = 120
+    app_mode: Literal['local','hosted'] = 'local'
+    public_app_url: str = ''
+    render_external_url: str = ''
+    pages_origin: str = 'https://setsam37.github.io'
+    google_client_id: str = ''
+    google_client_secret: SecretStr = SecretStr('')
+    session_secret: SecretStr = SecretStr('')
+    allowed_emails: list[str] = []
+    public_signup: bool = False
+
+    @model_validator(mode='after')
+    def validate_hosting(self):
+        self.allowed_emails=[email.strip().lower() for email in self.allowed_emails if email.strip()]
+        if self.app_mode=='hosted':
+            self.public_app_url=(self.public_app_url or self.render_external_url).rstrip('/')
+            for value in [self.public_app_url,self.pages_origin]:
+                parsed=urlparse(value)
+                if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.port not in [None,443] or parsed.path not in ['', '/'] or parsed.query or parsed.fragment:
+                    raise ValueError('Hosted URLs must be HTTPS origins.')
+            if not self.google_client_id or not self.google_client_secret.get_secret_value() or len(self.session_secret.get_secret_value())<32 or not self.openai_api_key.get_secret_value():
+                raise ValueError('Hosted mode requires Google credentials, a session secret of at least 32 characters, and an OpenAI key.')
+            if not self.public_signup and not self.allowed_emails:raise ValueError('Hosted mode requires invited email addresses.')
+        return self
 
     def prepare(self):
         self.data_dir.mkdir(parents=True,exist_ok=True)
         (self.data_dir/'media').mkdir(exist_ok=True)
         (self.data_dir/'jobs').mkdir(exist_ok=True)
+        (self.data_dir/'tmp').mkdir(exist_ok=True)
         return self

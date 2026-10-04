@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: recall-video-flashcards
+    runtime: docker
+    branch: main
+    plan: 1c-2g
+    region: ohio
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    healthCheckPath: /api/health
+    maxShutdownDelaySeconds: 30
+    disk:
+      name: recall-data
+      mountPath: /var/data
+      sizeGB: 10
+    envVars:
+      - key: APP_MODE
+        value: hosted
+      - key: DATA_DIR
+        value: /var/data
+      - key: UPLOAD_LIMIT_BYTES
+        value: "1073741824"
+      - key: PAGES_ORIGIN
+        value: https://setsam37.github.io
+      - key: PUBLIC_SIGNUP
+        value: "false"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ALLOWED_EMAILS
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false

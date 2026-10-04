@@ -8,18 +8,43 @@ def run_once(queue,handlers):
         queue.fail(job.id,getattr(error,'code','processing_failed'),getattr(error,'public_message','Processing failed. Retry the job or check local configuration.'))
     return True
 
+class WorkspaceWorker:
+    def __init__(self,config):
+        self.config=config;self.workspaces={}
+
+    def tick(self):
+        import re
+        from .storage import Repository
+        from .jobs import JobQueue
+        from .providers.openai_provider import OpenAIProvider
+        from .syllabus.build import prepare_lecture
+        from .cards.service import generate_job
+        paths=[self.config.data_dir]
+        if self.config.app_mode=='hosted':
+            accounts=self.config.data_dir/'accounts'
+            paths=sorted(p for p in accounts.iterdir() if p.is_dir() and not p.is_symlink() and re.fullmatch('[a-f0-9]{64}',p.name) and (p/'study.sqlite').is_file()) if accounts.exists() else []
+        worked=False
+        for path in paths:
+            if path not in self.workspaces:
+                config=self.config.model_copy(update={'data_dir':path}).prepare()
+                repo=Repository(path/'study.sqlite');queue=JobQueue(repo);queue.recover_interrupted()
+                self.workspaces[path]=(repo,queue,OpenAIProvider(config))
+            repo,queue,provider=self.workspaces[path]
+            handlers={'prepare':lambda job:prepare_lecture(job,repo,provider),'generate':lambda job:generate_job(job,repo,provider)}
+            worked=run_once(queue,handlers) or worked
+        return worked
+
 def main():
     import time
+    import threading
     from .config import Config
-    from .storage import Repository
-    from .jobs import JobQueue
-    from .providers.openai_provider import OpenAIProvider
-    from .syllabus.build import prepare_lecture
-    from .cards.service import generate_job
-    config=Config().prepare();repo=Repository(config.data_dir/'study.sqlite');queue=JobQueue(repo);provider=OpenAIProvider(config)
-    queue.recover_interrupted()
-    handlers={'prepare':lambda job:prepare_lecture(job,repo,provider),'generate':lambda job:generate_job(job,repo,provider)}
+    config=Config().prepare();worker=WorkspaceWorker(config)
+    def heartbeat():
+        while True:
+            pending=config.data_dir/'worker-heartbeat.tmp'
+            pending.write_text(str(time.time()));pending.replace(config.data_dir/'worker-heartbeat');time.sleep(2)
+    threading.Thread(target=heartbeat,daemon=True).start()
     while True:
-        if not run_once(queue,handlers):time.sleep(2)
+        if not worker.tick():time.sleep(2)
 
 if __name__=='__main__':main()

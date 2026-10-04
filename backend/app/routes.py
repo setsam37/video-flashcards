@@ -14,7 +14,8 @@ class GenerationRequest(Model):
     intervals:list[Interval]
     regenerate:bool=False
 
-def repository(request):return request.app.state.repository
+def repository(request):return getattr(request.state,'repository',request.app.state.repository)
+def request_config(request):return getattr(request.state,'config',request.app.state.config)
 def source_or_404(repo,id):
     try:return repo.get_source(id)
     except KeyError:raise HTTPException(404,'Lecture not found') from None
@@ -46,7 +47,7 @@ def get_lecture(id:str,request:Request):
 
 @router.post('/lectures/upload')
 async def upload(request:Request,video:UploadFile=File()):
-    path=await store_video(video,request.app.state.config);id=uuid.uuid4().hex;repo=repository(request)
+    path=await store_video(video,request_config(request));id=uuid.uuid4().hex;repo=repository(request)
     title=Path((video.filename or 'Lecture').replace('\\','/')).stem
     repo.save_source(SourceDescriptor(lecture_id=id,title=title,duration=0,source_kind='upload',media_path=str(path.resolve())))
     job=JobQueue(repo).enqueue(id,'prepare',[],False)
@@ -71,9 +72,9 @@ async def transcript(id:str,request:Request,transcript:UploadFile=File(),video:U
     try:segments=parse_captions(content.decode('utf-8-sig'),suffix[1:])
     except UnicodeError:raise HTTPException(422,'The transcript must use UTF-8 encoding.') from None
     if video:
-        path=await store_video(video,request.app.state.config)
+        path=await store_video(video,request_config(request))
         from .importing.media import probe_media
-        probed=probe_media(path,id,request.app.state.config)
+        probed=probe_media(path,id,request_config(request))
         source=source.model_copy(update={'media_path':str(path.resolve()),'duration':probed.duration,'chapters':source.chapters or probed.chapters})
     if not source.media_path and not source.youtube_id:raise HTTPException(422,'Attach a video or retain a YouTube reference for playback.')
     if source.duration==0:source=source.model_copy(update={'duration':max(s.end for s in segments)})
@@ -103,6 +104,6 @@ def retry(id:str,request:Request):
 def media(id:str,request:Request):
     source=source_or_404(repository(request),id)
     if not source.media_path:raise HTTPException(404,'No uploaded video is attached.')
-    path=Path(source.media_path).resolve();root=(request.app.state.config.data_dir/'media').resolve()
+    path=Path(source.media_path).resolve();root=(request_config(request).data_dir/'media').resolve()
     if not path.is_relative_to(root) or not path.is_file():raise HTTPException(404,'Uploaded video not found.')
     return FileResponse(path,media_type='video/webm' if path.suffix=='.webm' else 'video/mp4')
